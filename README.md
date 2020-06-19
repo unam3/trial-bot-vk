@@ -15,6 +15,8 @@ All configuration is done by five parameters in trial-bot-vk launch command (run
 stack exec trial-bot-vk-exe token groupId helpMsg repeatMsg echoRepeatNumberStr
 ```
 where
+- token — [community token](https://vk.com/dev/access_token?f=2.%20Community%20Token);
+- groupId — community ID;
 - helpMsg — string, which bot will send to the `/help` message;
 - repeatMsg — string, which bot will send to the `/repeat` message with currently set repeat number;
 - echoRepeatNumberStr - number from 1 to 5 (inclusive) of repeats to one message.
