@@ -8,13 +8,13 @@ module Bot
     Config
     ) where
 
-import Data.Aeson (FromJSON, ToJSON)
-import Data.Text (Text)
+import Data.Aeson (FromJSON, ToJSON (toJSON), defaultOptions, fieldLabelModifier, genericToJSON)
+import Data.Text (Text, breakOn, drop)
 import GHC.Generics (Generic)
-import Prelude hiding (id)
---import qualified Prelude (id)
+import Prelude hiding (drop, id)
+import qualified Prelude (drop)
 import Network.HTTP.Req
-import System.Log.Logger (Priority (DEBUG), setLevel, updateGlobalLogger)
+import System.Log.Logger (Priority (DEBUG), debugM, setLevel, updateGlobalLogger)
 
 
 type TokenSection = Text
@@ -24,7 +24,7 @@ type RepeatMessage = Text
 type NumberOfRepeats = Text
 type Config = (TokenSection, GroupId, HelpMessage, RepeatMessage, NumberOfRepeats)
 
-data LPServerInfoResponse = LPServerInfoResponse {
+newtype LPServerInfoResponse = LPServerInfoResponse {
     response :: LPServerInfo
 } deriving (Show, Generic)
 
@@ -39,17 +39,58 @@ data LPServerInfo = LPServerInfo {
 instance ToJSON LPServerInfo
 instance FromJSON LPServerInfo
 
-getLongPollKey :: Config -> IO LPServerInfo
-getLongPollKey (tokenSection, groupId, helpMsg, _, _) = let {
+getLongPollServerInfo :: Config -> IO LPServerInfo
+getLongPollServerInfo (tokenSection, groupId, _, _, _) = let {
     urlScheme = https "api.vk.com" /: "method" /: "groups.getLongPollServer";
     params = "v" =: ("5.110" :: Text) <>
         "access_token" =: tokenSection <>
         "group_id" =: groupId;
     runReqM = req GET urlScheme NoReqBody jsonResponse params >>=
-        (\ response' -> return (response $ responseBody response' :: LPServerInfo));
+        return . response . responseBody :: Req LPServerInfo;
 } in runReq defaultHttpConfig runReqM
 
+
+-- create URL only once, not on each request!
+-- makeLongPollURL :: LPServerInfo -> Text
+
+
+data Update = Update {
+    _type :: Text,
+    --object :: Object,
+    group_id :: GroupId
+} deriving (Show, Generic)
+
+instance ToJSON Update where
+    toJSON = genericToJSON defaultOptions {fieldLabelModifier = Prelude.drop 1 }
+instance FromJSON Update
+
+data LPResponse = LPResponse {
+    ts :: Text,
+    updates :: [Update]
+} deriving (Show, Generic)
+
+instance ToJSON LPResponse
+instance FromJSON LPResponse
+
+getLongPoll :: LPServerInfo -> IO LPResponse
+getLongPoll serverInfo = let {
+    -- https://lp.vk.com/wh123456789
+    (serverName, wh) = breakOn "/" $ drop 8 (server serverInfo);
+    urlScheme = https serverName /: drop 1 wh;
+    params = "act" =: ("a_check" :: Text) <>
+        "key" =: key serverInfo <>
+        "ts" =: (ts :: LPServerInfo -> Text) serverInfo;
+    runReqM = req GET urlScheme NoReqBody jsonResponse params >>=
+        return . responseBody :: Req LPResponse;
+} in runReq defaultHttpConfig runReqM
+
+
 cycleEcho :: Config -> IO ()
-cycleEcho config = updateGlobalLogger "trial-bot.bot" (setLevel DEBUG)
-    >> getLongPollKey config
-    >>= print
+cycleEcho config = updateGlobalLogger "trial-bot-vk.bot" (setLevel DEBUG)
+    >> getLongPollServerInfo config
+    -- >>= debugM  "trial-bot-vk.bot" . show
+    -- >>= \ serverInfo -> debugM  "trial-bot-vk.bot" . show $ server serverInfo
+    -- >> getLongPoll serverInfo
+    >>= getLongPoll
+    >>= debugM  "trial-bot-vk.bot" . show
+    -- >>= \ updates -> debugM  "trial-bot-vk.bot" $ show updates

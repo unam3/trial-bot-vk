@@ -1,6 +1,7 @@
 module Main where
 
 import Bot (cycleEcho, Config)
+import Control.Monad (void)
 import Data.Text (pack)
 import System.Environment (getArgs)
 import System.Log.Logger (traplogging, Priority (ERROR))
@@ -26,9 +27,9 @@ trialBot = do
     args <- getArgs
     case args of
         [_, _, _, _, _] -> case processArgs args of
-            Just args' -> cycleEcho args' >> return ()
+            Just args' -> void $ cycleEcho args'
             Nothing -> error "error: some argument passed from command line is wrong"
         _ -> error "error: exactly five arguments needed: access token, group id, helpMsg, repeatMsg, echoRepeatNumber"
 
 main :: IO ()
-main = traplogging "trial-bot.main" ERROR "Bot shutdown due to" trialBot
+main = traplogging "trial-bot-vk.main" ERROR "Bot shutdown due to" trialBot
