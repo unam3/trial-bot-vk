@@ -11,7 +11,7 @@ processArgs :: [String] -> Maybe Config
 processArgs [token, groupId, helpMsg, repeatMsg, echoRepeatNumberStr] = let {
     echoRepeatNumber = (read echoRepeatNumberStr :: Int);
     isInRange n = n > 0 && n < 6;
-} in if or [null token, null helpMsg, null repeatMsg, not $ isInRange echoRepeatNumber]
+} in if or [null token, null groupId, null helpMsg, null repeatMsg, not $ isInRange echoRepeatNumber]
     then Nothing
     else Just (
         pack token,
