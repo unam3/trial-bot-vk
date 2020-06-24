@@ -8,7 +8,6 @@ module Bot
     Config
     ) where
 
-import Control.Monad (void)
 import Data.Aeson (FromJSON (parseJSON), ToJSON, defaultOptions, fieldLabelModifier, genericParseJSON)
 import Data.Text (Text, breakOn, drop, pack)
 import GHC.Generics (Generic)
@@ -126,13 +125,13 @@ processUpdates config updates = let {
     newMessages = filter isMessageNew updates;
 } in if null newMessages
     then return ()
-    else void . sendMessage config $ last newMessages
+    else sendMessage config (last newMessages) >>= (debugM "trial-bot-vk.bot" . show)
 
 cycleProcessing' :: Config -> LPServerInfo -> IO LPResponse
 cycleProcessing' config serverInfo =
     --debugM  "trial-bot-vk.bot" . show $ server serverInfo
     getLongPoll serverInfo
-    >>= \ lp -> debugM  "trial-bot-vk.bot" (show lp)
+    >>= \ lp -> debugM "trial-bot-vk.bot" (show lp)
     >> processUpdates config (updates lp)
     >> cycleProcessing' config LPServerInfo {
         key = key serverInfo,
