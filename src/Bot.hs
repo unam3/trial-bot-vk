@@ -54,9 +54,21 @@ getLongPollServerInfo (tokenSection, groupId, _, _, _) = let {
 -- makeLongPollURL :: LPServerInfo -> Text
 
 
+newtype PrivateMessage = PrivateMessage {
+    text :: Text
+} deriving (Show, Generic)
+
+instance FromJSON PrivateMessage
+
+newtype Object = Object {
+    message :: PrivateMessage
+} deriving (Show, Generic)
+
+instance FromJSON Object
+
 data Update = Update {
     _type :: Text,
-    --object :: Object,
+    _object :: Object,
     _group_id :: GroupId
 } deriving (Show, Generic)
 
@@ -83,12 +95,20 @@ getLongPoll serverInfo = let {
         return . responseBody :: Req LPResponse;
 } in runReq defaultHttpConfig runReqM
 
+isMessageNew :: Update -> Bool
+isMessageNew update = _type update == "message_new"
+
+processUpdate :: [Update] -> IO ()
+processUpdate = print . show . filter isMessageNew
+
+-- sendMessage :: 
+
 cycleProcessing' :: Config -> LPServerInfo -> IO LPResponse
 cycleProcessing' config serverInfo =
     --debugM  "trial-bot-vk.bot" . show $ server serverInfo
     getLongPoll serverInfo
-    -- >>= debugM  "trial-bot-vk.bot" . show
     >>= \ lp -> debugM  "trial-bot-vk.bot" (show lp)
+    >> processUpdate (updates lp)
     >> cycleProcessing' config LPServerInfo {
         key = key serverInfo,
         server = server serverInfo,
