@@ -8,6 +8,7 @@ module Bot
     Config
     ) where
 
+import Control.Monad (void)
 import Data.Aeson (FromJSON (parseJSON), ToJSON, defaultOptions, fieldLabelModifier, genericParseJSON)
 import Data.Text (Text, breakOn, drop, pack)
 import GHC.Generics (Generic)
@@ -46,7 +47,7 @@ getLongPollServerInfo (tokenSection, groupId, _, _, _) = let {
         "access_token" =: tokenSection <>
         "group_id" =: pack (show groupId);
     runReqM = req GET urlScheme NoReqBody jsonResponse params >>=
-        return . response . responseBody :: Req LPServerInfo;
+        return . (response :: LPServerInfoResponse -> LPServerInfo) . responseBody :: Req LPServerInfo;
 } in runReq defaultHttpConfig runReqM
 
 
@@ -54,8 +55,10 @@ getLongPollServerInfo (tokenSection, groupId, _, _, _) = let {
 -- makeLongPollURL :: LPServerInfo -> Text
 
 
-newtype PrivateMessage = PrivateMessage {
-    text :: Text
+data PrivateMessage = PrivateMessage {
+    text :: Text,
+    peer_id :: Int,
+    date :: Int
 } deriving (Show, Generic)
 
 instance FromJSON PrivateMessage
@@ -98,17 +101,39 @@ getLongPoll serverInfo = let {
 isMessageNew :: Update -> Bool
 isMessageNew = (== "message_new") . _type
 
-processUpdate :: [Update] -> IO ()
-processUpdate = print . show . filter isMessageNew
+newtype SendMessageResponse = SendMessageResponse {
+    response :: Int
+} deriving (Show, Generic)
 
--- sendMessage :: 
+instance FromJSON SendMessageResponse
+
+sendMessage :: Config -> Update -> IO SendMessageResponse
+sendMessage (tokenSection, _, _, _, _) update = let {
+    incomingMessage = (message :: Object -> PrivateMessage) $ _object update;
+    urlScheme = https "api.vk.com" /: "method" /: "messages.send";
+    params = "v" =: ("5.110" :: Text) <>
+        "access_token" =: tokenSection <>
+        "group_id" =: _group_id update <>
+        "peer_id" =: peer_id incomingMessage <>
+        "random_id" =: date incomingMessage <>
+        "message" =: text incomingMessage;
+    runReqM = req GET urlScheme NoReqBody jsonResponse params
+        >>= return . responseBody :: Req SendMessageResponse;
+} in runReq defaultHttpConfig runReqM
+
+processUpdates :: Config -> [Update] -> IO ()
+processUpdates config updates = let {
+    newMessages = filter isMessageNew updates;
+} in if null newMessages
+    then return ()
+    else void . sendMessage config $ last newMessages
 
 cycleProcessing' :: Config -> LPServerInfo -> IO LPResponse
 cycleProcessing' config serverInfo =
     --debugM  "trial-bot-vk.bot" . show $ server serverInfo
     getLongPoll serverInfo
     >>= \ lp -> debugM  "trial-bot-vk.bot" (show lp)
-    >> processUpdate (updates lp)
+    >> processUpdates config (updates lp)
     >> cycleProcessing' config LPServerInfo {
         key = key serverInfo,
         server = server serverInfo,
