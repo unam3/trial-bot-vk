@@ -8,8 +8,8 @@ module Bot
     Config
     ) where
 
-import Data.Aeson (FromJSON, ToJSON (toJSON), defaultOptions, fieldLabelModifier, genericToJSON)
-import Data.Text (Text, breakOn, drop)
+import Data.Aeson (FromJSON (parseJSON), ToJSON, defaultOptions, fieldLabelModifier, genericParseJSON)
+import Data.Text (Text, breakOn, drop, pack)
 import GHC.Generics (Generic)
 import Prelude hiding (drop, id)
 import qualified Prelude (drop)
@@ -18,7 +18,7 @@ import System.Log.Logger (Priority (DEBUG), debugM, setLevel, updateGlobalLogger
 
 
 type TokenSection = Text
-type GroupId = Text
+type GroupId = Int
 type HelpMessage = Text
 type RepeatMessage = Text
 type NumberOfRepeats = Text
@@ -44,7 +44,7 @@ getLongPollServerInfo (tokenSection, groupId, _, _, _) = let {
     urlScheme = https "api.vk.com" /: "method" /: "groups.getLongPollServer";
     params = "v" =: ("5.110" :: Text) <>
         "access_token" =: tokenSection <>
-        "group_id" =: groupId;
+        "group_id" =: pack (show groupId);
     runReqM = req GET urlScheme NoReqBody jsonResponse params >>=
         return . response . responseBody :: Req LPServerInfo;
 } in runReq defaultHttpConfig runReqM
@@ -57,19 +57,17 @@ getLongPollServerInfo (tokenSection, groupId, _, _, _) = let {
 data Update = Update {
     _type :: Text,
     --object :: Object,
-    group_id :: GroupId
+    _group_id :: GroupId
 } deriving (Show, Generic)
 
-instance ToJSON Update where
-    toJSON = genericToJSON defaultOptions {fieldLabelModifier = Prelude.drop 1 }
-instance FromJSON Update
+instance FromJSON Update where
+    parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = Prelude.drop 1}
 
 data LPResponse = LPResponse {
     ts :: Text,
     updates :: [Update]
 } deriving (Show, Generic)
 
-instance ToJSON LPResponse
 instance FromJSON LPResponse
 
 getLongPoll :: LPServerInfo -> IO LPResponse
