@@ -96,7 +96,7 @@ getLongPoll serverInfo = let {
 } in runReq defaultHttpConfig runReqM
 
 isMessageNew :: Update -> Bool
-isMessageNew update = _type update == "message_new"
+isMessageNew = (== "message_new") . _type
 
 processUpdate :: [Update] -> IO ()
 processUpdate = print . show . filter isMessageNew
