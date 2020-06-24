@@ -106,16 +106,23 @@ newtype SendMessageResponse = SendMessageResponse {
 
 instance FromJSON SendMessageResponse
 
+getMessage :: Update -> PrivateMessage
+getMessage = (message :: Object -> PrivateMessage) . _object;
+
 sendMessage :: Config -> Update -> IO SendMessageResponse
-sendMessage (tokenSection, _, _, _, _) update = let {
-    incomingMessage = (message :: Object -> PrivateMessage) $ _object update;
+sendMessage (tokenSection, _, helpMsg, _, _) update = let {
+    incomingMessage = getMessage update;
     urlScheme = https "api.vk.com" /: "method" /: "messages.send";
+    msgText' = text incomingMessage;
+    msgText = (case msgText' of
+        "/help" -> helpMsg
+        _ -> msgText');
     params = "v" =: ("5.110" :: Text) <>
         "access_token" =: tokenSection <>
         "group_id" =: _group_id update <>
         "peer_id" =: peer_id incomingMessage <>
         "random_id" =: date incomingMessage <>
-        "message" =: text incomingMessage;
+        "message" =: msgText;
     runReqM = req GET urlScheme NoReqBody jsonResponse params
         >>= return . responseBody :: Req SendMessageResponse;
 } in runReq defaultHttpConfig runReqM
@@ -123,9 +130,10 @@ sendMessage (tokenSection, _, _, _, _) update = let {
 processUpdates :: Config -> [Update] -> IO ()
 processUpdates config updates = let {
     newMessages = filter isMessageNew updates;
+    latestMessage = last newMessages;
 } in if null newMessages
     then return ()
-    else sendMessage config (last newMessages) >>= (debugM "trial-bot-vk.bot" . show)
+    else sendMessage config latestMessage >>= (debugM "trial-bot-vk.bot" . show)
 
 cycleProcessing' :: Config -> LPServerInfo -> IO LPResponse
 cycleProcessing' config serverInfo =
