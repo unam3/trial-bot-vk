@@ -88,8 +88,12 @@ cycleProcessing' config serverInfo =
     --debugM  "trial-bot-vk.bot" . show $ server serverInfo
     getLongPoll serverInfo
     -- >>= debugM  "trial-bot-vk.bot" . show
-    >>= \ updates -> debugM  "trial-bot-vk.bot" (show updates)
-    >> cycleProcessing' config serverInfo
+    >>= \ lp -> debugM  "trial-bot-vk.bot" (show lp)
+    >> cycleProcessing' config LPServerInfo {
+        key = key serverInfo,
+        server = server serverInfo,
+        ts = (ts :: LPResponse -> Text) lp
+    }
 
 cycleProcessing :: Config -> IO LPResponse
 cycleProcessing config = updateGlobalLogger "trial-bot-vk.bot" (setLevel DEBUG)
