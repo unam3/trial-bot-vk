@@ -1,6 +1,6 @@
 module Main where
 
-import Bot (cycleEcho, Config)
+import Bot (cycleProcessing, Config)
 import Control.Monad (void)
 import Data.Text (pack)
 import System.Environment (getArgs)
@@ -27,7 +27,7 @@ trialBot = do
     args <- getArgs
     case args of
         [_, _, _, _, _] -> case processArgs args of
-            Just args' -> void $ cycleEcho args'
+            Just args' -> void $ cycleProcessing args'
             Nothing -> error "error: some argument passed from command line is wrong"
         _ -> error "error: exactly five arguments needed: access token, group id, helpMsg, repeatMsg, echoRepeatNumber"
 

@@ -4,7 +4,7 @@
 
 module Bot
     (
-    cycleEcho,
+    cycleProcessing,
     Config
     ) where
 
@@ -79,18 +79,22 @@ getLongPoll serverInfo = let {
     urlScheme = https serverName /: drop 1 wh;
     params = "act" =: ("a_check" :: Text) <>
         "key" =: key serverInfo <>
-        "ts" =: (ts :: LPServerInfo -> Text) serverInfo;
+        "ts" =: (ts :: LPServerInfo -> Text) serverInfo <>
+        "wait" =: ("25" :: Text);
     runReqM = req GET urlScheme NoReqBody jsonResponse params >>=
         return . responseBody :: Req LPResponse;
 } in runReq defaultHttpConfig runReqM
 
-
-cycleEcho :: Config -> IO ()
-cycleEcho config = updateGlobalLogger "trial-bot-vk.bot" (setLevel DEBUG)
-    >> getLongPollServerInfo config
+cycleProcessing' :: Config -> LPServerInfo -> IO LPResponse
+cycleProcessing' config serverInfo =
+    --debugM  "trial-bot-vk.bot" . show $ server serverInfo
+    getLongPoll serverInfo
     -- >>= debugM  "trial-bot-vk.bot" . show
-    -- >>= \ serverInfo -> debugM  "trial-bot-vk.bot" . show $ server serverInfo
-    -- >> getLongPoll serverInfo
-    >>= getLongPoll
-    >>= debugM  "trial-bot-vk.bot" . show
-    -- >>= \ updates -> debugM  "trial-bot-vk.bot" $ show updates
+    >>= \ updates -> debugM  "trial-bot-vk.bot" (show updates)
+    >> cycleProcessing' config serverInfo
+
+cycleProcessing :: Config -> IO LPResponse
+cycleProcessing config = updateGlobalLogger "trial-bot-vk.bot" (setLevel DEBUG)
+    >> getLongPollServerInfo config
+    >>= \ serverInfo -> debugM  "trial-bot-vk.bot" (show serverInfo)
+    >> cycleProcessing' config serverInfo
