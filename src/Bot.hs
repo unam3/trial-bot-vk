@@ -8,8 +8,12 @@ module Bot
     Config
     ) where
 
+import Control.Monad (replicateM_, unless)
 import Data.Aeson (FromJSON (parseJSON), ToJSON, defaultOptions, fieldLabelModifier, genericParseJSON)
 import Data.Text (Text, breakOn, drop, pack)
+import Data.Text.Read (decimal)
+import Data.Time.Clock.System (SystemTime, getSystemTime, systemNanoseconds)
+import Data.Either (fromRight)
 import GHC.Generics (Generic)
 import Prelude hiding (drop, id)
 import qualified Prelude (drop)
@@ -109,31 +113,48 @@ instance FromJSON SendMessageResponse
 getMessage :: Update -> PrivateMessage
 getMessage = (message :: Object -> PrivateMessage) . _object;
 
-sendMessage :: Config -> Update -> IO SendMessageResponse
-sendMessage (tokenSection, _, helpMsg, _, _) update = let {
+isMsgTextHelpCommand :: Text -> Bool
+isMsgTextHelpCommand = (== "/help")
+
+isMsgTextRepeatCommand :: Text -> Bool
+isMsgTextRepeatCommand = (== "/repeat")
+
+sendMessage :: Config -> Update -> SystemTime -> IO SendMessageResponse
+sendMessage (tokenSection, _, helpMsg, repeatMsg, echoRepeatNumberText) update systemTime = let {
     incomingMessage = getMessage update;
     urlScheme = https "api.vk.com" /: "method" /: "messages.send";
     msgText' = text incomingMessage;
-    msgText = (case msgText' of
-        "/help" -> helpMsg
-        _ -> msgText');
+    msgText
+        | isMsgTextHelpCommand msgText' = helpMsg
+        | isMsgTextRepeatCommand msgText' =
+            mconcat ["Current number of repeats is ", echoRepeatNumberText, ". ", repeatMsg]
+        | otherwise = msgText';
     params = "v" =: ("5.110" :: Text) <>
         "access_token" =: tokenSection <>
         "group_id" =: _group_id update <>
         "peer_id" =: peer_id incomingMessage <>
-        "random_id" =: date incomingMessage <>
+        "random_id" =: pack (show $ systemNanoseconds systemTime) <>
         "message" =: msgText;
     runReqM = req GET urlScheme NoReqBody jsonResponse params
         >>= return . responseBody :: Req SendMessageResponse;
 } in runReq defaultHttpConfig runReqM
 
+getInt :: Text -> Int
+getInt = fst . fromRight (1, "1") . decimal
+
 processUpdates :: Config -> [Update] -> IO ()
-processUpdates config updates = let {
+processUpdates config@(_, _, _, _, echoRepeatNumberText) updates = let {
     newMessages = filter isMessageNew updates;
     latestMessage = last newMessages;
-} in if null newMessages
-    then return ()
-    else sendMessage config latestMessage >>= (debugM "trial-bot-vk.bot" . show)
+    msgText = text $ getMessage latestMessage;
+    echoRepeatNumber = getInt echoRepeatNumberText;
+    sendAndLog = getSystemTime
+        >>= sendMessage config latestMessage
+        >>= (debugM "trial-bot-vk.bot" . show);
+} in unless (null newMessages) $
+    if isMsgTextHelpCommand msgText || isMsgTextRepeatCommand msgText
+    then sendAndLog
+    else replicateM_ echoRepeatNumber sendAndLog
 
 cycleProcessing' :: Config -> LPServerInfo -> IO LPResponse
 cycleProcessing' config serverInfo =
