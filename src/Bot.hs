@@ -9,8 +9,10 @@ module Bot
     ) where
 
 import Control.Monad (replicateM_)
-import Data.Aeson (FromJSON (parseJSON), ToJSON, defaultOptions, fieldLabelModifier, genericParseJSON)
+import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), defaultOptions, encode, fieldLabelModifier, genericParseJSON, genericToJSON)
+import Data.ByteString.Lazy (toStrict)
 import Data.Text (Text, breakOn, drop, pack)
+import Data.Text.Encoding (decodeUtf8)
 import Data.Text.Read (decimal)
 import Data.Time.Clock.System (SystemTime, getSystemTime, systemNanoseconds)
 import Data.Either (fromRight)
@@ -104,7 +106,7 @@ getLongPoll serverInfo = let {
 } in runReq defaultHttpConfig runReqM
 
 isMessageNew :: Update -> Bool
-isMessageNew = (== "message_new") . _type
+isMessageNew = (== "message_new") . (_type :: Update -> Text)
 
 newtype SendMessageResponse = SendMessageResponse {
     response :: Int
@@ -120,6 +122,40 @@ isMsgTextHelpCommand = (== "/help")
 
 isMsgTextRepeatCommand :: Text -> Bool
 isMsgTextRepeatCommand = (== "/repeat")
+
+
+data Action = Action {
+    _label :: Text,
+    _type :: Text,
+    _payload :: Text
+} deriving (Show, Generic)
+
+instance ToJSON Action where
+    toJSON = genericToJSON defaultOptions {fieldLabelModifier = Prelude.drop 1}
+
+newtype Button = Button {
+    action :: Action
+} deriving (Show, Generic)
+
+instance ToJSON Button
+
+data Keyboard = Keyboard {
+    one_time :: Bool,
+    buttons :: [[Button]]
+} deriving (Show, Generic)
+
+instance ToJSON Keyboard
+
+keyboard :: Text
+keyboard = decodeUtf8 . toStrict $ encode Keyboard {
+    one_time = True,
+    buttons = [
+        [Button { action = Action {_label = "1", _payload = "1", _type = "text"}}],
+        [Button { action = Action {_label = "2", _payload = "2", _type = "text"}}],
+        [Button { action = Action {_label = "3", _payload = "3", _type = "text"}}],
+        [Button { action = Action {_label = "4", _payload = "4", _type = "text"}}],
+        [Button { action = Action {_label = "5", _payload = "5", _type = "text"}}]
+    ]}
 
 sendMessage :: Config -> Update -> SystemTime -> IO SendMessageResponse
 sendMessage (tokenSection, _, helpMsg, repeatMsg, echoRepeatNumberText) update systemTime = let {
@@ -138,7 +174,7 @@ sendMessage (tokenSection, _, helpMsg, repeatMsg, echoRepeatNumberText) update s
         "random_id" =: pack (show $ systemNanoseconds systemTime) <>
         "message" =: msgText;
     params = if isMsgTextRepeatCommand msgText'
-        then params' <> "keyboard" =: ("{\"one_time\": true, \"buttons\": [[{\"action\": {\"label\": \"1\", \"type\": \"text\", \"payload\": \"1\"}}],[{\"action\": {\"label\": \"2\", \"type\": \"text\", \"payload\": \"2\"}}]]}" :: Text)
+        then params' <> "keyboard" =: keyboard
         else params';
     runReqM = req GET urlScheme NoReqBody jsonResponse params
         >>= return . responseBody :: Req SendMessageResponse;
