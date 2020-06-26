@@ -2,6 +2,7 @@ module Main where
 
 import Bot (cycleProcessing, Config)
 import Control.Monad (void)
+import Data.Map.Strict (empty)
 import Data.Text (pack)
 import System.Environment (getArgs)
 import System.Log.Logger (traplogging, Priority (ERROR))
@@ -18,7 +19,8 @@ processArgs [token, groupId, helpMsg, repeatMsg, echoRepeatNumberStr] = let {
         read groupId :: Int,
         pack helpMsg,
         pack repeatMsg,
-        pack echoRepeatNumberStr
+        pack echoRepeatNumberStr,
+        empty
     )
 processArgs _ = Nothing
 

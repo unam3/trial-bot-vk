@@ -16,6 +16,7 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Text.Read (decimal)
 import Data.Time.Clock.System (SystemTime, getSystemTime, systemNanoseconds)
 import Data.Either (fromRight)
+import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust, isJust)
 import GHC.Generics (Generic)
 import Prelude hiding (drop, id)
@@ -29,7 +30,9 @@ type GroupId = Int
 type HelpMessage = Text
 type RepeatMessage = Text
 type NumberOfRepeats = Text
-type Config = (TokenSection, GroupId, HelpMessage, RepeatMessage, NumberOfRepeats)
+type FromId = Int
+type NumberOfRepeatsMap = M.Map FromId NumberOfRepeats
+type Config = (TokenSection, GroupId, HelpMessage, RepeatMessage, NumberOfRepeats, NumberOfRepeatsMap)
 
 newtype LPServerInfoResponse = LPServerInfoResponse {
     response :: LPServerInfo
@@ -47,7 +50,7 @@ instance ToJSON LPServerInfo
 instance FromJSON LPServerInfo
 
 getLongPollServerInfo :: Config -> IO LPServerInfo
-getLongPollServerInfo (tokenSection, groupId, _, _, _) = let {
+getLongPollServerInfo (tokenSection, groupId, _, _, _, _) = let {
     urlScheme = https "api.vk.com" /: "method" /: "groups.getLongPollServer";
     params = "v" =: ("5.110" :: Text) <>
         "access_token" =: tokenSection <>
@@ -57,15 +60,12 @@ getLongPollServerInfo (tokenSection, groupId, _, _, _) = let {
 } in runReq defaultHttpConfig runReqM
 
 
--- create URL only once, not on each request!
--- makeLongPollURL :: LPServerInfo -> Text
-
-
 data PrivateMessage = PrivateMessage {
     text :: Text,
     peer_id :: Int,
     date :: Int,
-    payload :: Maybe Text
+    payload :: Maybe Text,
+    from_id :: FromId
 } deriving (Show, Generic)
 
 instance FromJSON PrivateMessage
@@ -158,14 +158,14 @@ keyboard = decodeUtf8 . toStrict $ encode Keyboard {
     ]}
 
 sendMessage :: Config -> Update -> SystemTime -> IO SendMessageResponse
-sendMessage (tokenSection, _, helpMsg, repeatMsg, echoRepeatNumberText) update systemTime = let {
+sendMessage (tokenSection, _, helpMsg, repeatMsg, echoRepeatNumberText, _) update systemTime = let {
     incomingMessage = getMessage update;
     urlScheme = https "api.vk.com" /: "method" /: "messages.send";
     msgText' = text incomingMessage;
     msgText
         | isMsgTextHelpCommand msgText' = helpMsg
         | isMsgTextRepeatCommand msgText' =
-            mconcat ["Current number of repeats is ", echoRepeatNumberText, ". ", repeatMsg]
+            mconcat ["Current number of repeats for you is ", echoRepeatNumberText, ". ", repeatMsg]
         | otherwise = msgText';
     params' = "v" =: ("5.110" :: Text) <>
         "access_token" =: tokenSection <>
@@ -184,18 +184,20 @@ getInt :: Text -> Int
 getInt = fst . fromRight (1, "1") . decimal
 
 processUpdates :: Config -> [Update] -> IO Config
-processUpdates config@(tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumberText) updates = let {
+processUpdates config@(tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumberText, numberOfRepeatsMap) updates = let {
     newMessages = filter isMessageNew updates;
     latestMessage = last newMessages;
     msg = getMessage latestMessage;
     msgText = text msg;
+    isMsgHasNoText = msgText == "";
     maybePayload = payload msg;
-    echoRepeatNumber = getInt echoRepeatNumberText;
+    newNumberOfRepeatsMap = M.insert (from_id msg) (fromJust maybePayload) numberOfRepeatsMap;
+    echoRepeatNumber = getInt $ M.findWithDefault echoRepeatNumberText (from_id msg) numberOfRepeatsMap;
     sendAndLog = getSystemTime
         >>= sendMessage config latestMessage
         >>= (debugM "trial-bot-vk.bot" . show);
-    newConfig = (tokenSection, groupId, helpMsg, repeatMsg, fromJust maybePayload);
-} in if null newMessages
+    newConfig = (tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumberText, newNumberOfRepeatsMap);
+} in if null newMessages || isMsgHasNoText
     then return config 
     else if isJust maybePayload
     then return newConfig
@@ -205,7 +207,6 @@ processUpdates config@(tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumb
 
 cycleProcessing' :: Config -> LPServerInfo -> IO LPResponse
 cycleProcessing' config serverInfo =
-    --debugM  "trial-bot-vk.bot" . show $ server serverInfo
     getLongPoll serverInfo
     >>= \ lp -> debugM "trial-bot-vk.bot" (show lp)
     >> processUpdates config (updates lp)
