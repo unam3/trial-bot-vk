@@ -33,4 +33,6 @@ stack exec trial-bot-vk-exe "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" "1234567
 
 Only messages that was received when bot is up and running will be processed.
 
-Keyboard in the answer to `/repeat` command will be accessible to all chat participants and will be applied to settings of the first one who use it.
+Keyboard in the answer to `/repeat` command will be accessible to all chat participants (VK limitation) and will be applied for the first one who use it.
+
+Number of message repeats for all chats of the participant is the same.
