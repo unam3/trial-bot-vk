@@ -2,12 +2,13 @@
 
 ## Installation and Usage
 
+Some preparations on VK side need to be done: preface and part 1 of the [VK bots docs](https://vk.com/dev/bots_docs).
+
 To use bot one need to install [stack](https://docs.haskellstack.org/en/stable/README/#how-to-install) and then run in terminal from project directory:
 
 ```
 stack build
 ```
-
 
 All configuration is done by five parameters in trial-bot-vk launch command (run from project directory):
 
@@ -28,7 +29,8 @@ stack exec trial-bot-vk-exe "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" "1234567
 ```
 
 
-## Constraints
+## Known limitations
 
-It's assumed that bot will be used only in one private chat.
-Only latest text message will be processed.
+Only messages that was received when bot is up and running will be processed.
+
+Keyboard in the answer to `/repeat` command will be accessible to all chat participants and will be applied to settings of the first one who use it.
