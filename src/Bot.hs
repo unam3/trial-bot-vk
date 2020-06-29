@@ -190,8 +190,8 @@ processUpdates config@(tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumb
     msg = getMessage latestMessage;
     msgText = text msg;
     isMsgHasNoText = msgText == "";
-    maybePayload = payload msg;
-    newNumberOfRepeatsMap = M.insert (from_id msg) (fromJust maybePayload) numberOfRepeatsMap;
+    maybeNewEchoRepeatNumberText = payload msg;
+    newNumberOfRepeatsMap = M.insert (from_id msg) (fromJust maybeNewEchoRepeatNumberText) numberOfRepeatsMap;
     echoRepeatNumber = getInt $ M.findWithDefault echoRepeatNumberText (from_id msg) numberOfRepeatsMap;
     sendAndLog = getSystemTime
         >>= sendMessage config latestMessage
@@ -199,7 +199,7 @@ processUpdates config@(tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumb
     newConfig = (tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumberText, newNumberOfRepeatsMap);
 } in if null newMessages || isMsgHasNoText
     then return config 
-    else if isJust maybePayload
+    else if isJust maybeNewEchoRepeatNumberText
     then return newConfig
     else (if isMsgTextHelpCommand msgText || isMsgTextRepeatCommand msgText
     then sendAndLog

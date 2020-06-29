@@ -1,6 +1,6 @@
 # VK echo-bot: trial-bot-vk
 
-## Installation and Usage
+## Installation and usage
 
 Some preparations on VK side need to be done: preface and part 1 of the [VK bots docs](https://vk.com/dev/bots_docs).
 
