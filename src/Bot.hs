@@ -26,7 +26,7 @@ import System.Log.Logger (Priority (DEBUG), debugM, setLevel, updateGlobalLogger
 
 
 type TokenSection = Text
-type GroupId = Int
+type GroupId = Text
 type HelpMessage = Text
 type RepeatMessage = Text
 type NumberOfRepeats = Text
@@ -54,7 +54,7 @@ getLongPollServerInfo (tokenSection, groupId, _, _, _, _) = let {
     urlScheme = https "api.vk.com" /: "method" /: "groups.getLongPollServer";
     params = "v" =: ("5.110" :: Text) <>
         "access_token" =: tokenSection <>
-        "group_id" =: pack (show groupId);
+        "group_id" =: groupId;
     runReqM = req GET urlScheme NoReqBody jsonResponse params >>=
         return . (response :: LPServerInfoResponse -> LPServerInfo) . responseBody :: Req LPServerInfo;
 } in runReq defaultHttpConfig runReqM
@@ -79,7 +79,7 @@ instance FromJSON Object
 data Update = Update {
     _type :: Text,
     _object :: Object,
-    _group_id :: GroupId
+    _group_id :: Int
 } deriving (Show, Generic)
 
 instance FromJSON Update where

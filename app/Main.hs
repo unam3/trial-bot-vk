@@ -16,7 +16,7 @@ processArgs [token, groupId, helpMsg, repeatMsg, echoRepeatNumberStr] = let {
     then Nothing
     else Just (
         pack token,
-        read groupId :: Int,
+        pack groupId,
         pack helpMsg,
         pack repeatMsg,
         pack echoRepeatNumberStr,
