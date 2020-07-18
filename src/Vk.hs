@@ -2,15 +2,15 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 
-module Bot
+module Vk
     (
-    cycleProcessing,
-    Config
+    startBotWithLogger
     ) where
 
-import Control.Monad (replicateM_)
+import Control.Monad (replicateM_, void)
 import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), defaultOptions, encode, fieldLabelModifier, genericParseJSON, genericToJSON)
 import Data.ByteString.Lazy (toStrict)
+import Data.Map.Strict (empty)
 import Data.Text (Text, breakOn, drop, pack)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Text.Read (decimal)
@@ -22,7 +22,8 @@ import GHC.Generics (Generic)
 import Prelude hiding (drop, id)
 import qualified Prelude (drop)
 import Network.HTTP.Req
-import System.Log.Logger (Priority (DEBUG), debugM, setLevel, updateGlobalLogger)
+import System.Environment (getArgs)
+import System.Log.Logger (Priority (DEBUG, ERROR), debugM, setLevel, traplogging, updateGlobalLogger)
 
 
 type TokenSection = Text
@@ -221,3 +222,32 @@ cycleProcessing config = updateGlobalLogger "trial-bot-vk.bot" (setLevel DEBUG)
     >> getLongPollServerInfo config
     >>= \ serverInfo -> debugM  "trial-bot-vk.bot" (show serverInfo)
     >> cycleProcessing' config serverInfo
+
+
+processArgs :: [String] -> Maybe Config
+processArgs [token, groupId, helpMsg, repeatMsg, echoRepeatNumberStr] = let {
+    echoRepeatNumber = (read echoRepeatNumberStr :: Int);
+    isInRange n = n > 0 && n < 6;
+} in if or [null token, null groupId, null helpMsg, null repeatMsg, not $ isInRange echoRepeatNumber]
+    then Nothing
+    else Just (
+        pack token,
+        pack groupId,
+        pack helpMsg,
+        pack repeatMsg,
+        pack echoRepeatNumberStr,
+        empty
+    )
+processArgs _ = Nothing
+
+startBot :: IO ()
+startBot = do
+    args <- getArgs
+    case args of
+        [_, _, _, _, _] -> case processArgs args of
+            Just args' -> void $ cycleProcessing args'
+            Nothing -> error "error: some argument passed from command line is wrong"
+        _ -> error "error: exactly five arguments needed: access token, group id, helpMsg, repeatMsg, echoRepeatNumber"
+
+startBotWithLogger :: IO ()
+startBotWithLogger = traplogging "trial-bot-vk.main" ERROR "Bot shutdown due to" startBot
