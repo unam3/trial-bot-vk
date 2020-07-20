@@ -1,7 +1,7 @@
 module Main where
 
+import System.Environment (getArgs)
 import Vk (startBotWithLogger)
 
-
 main :: IO ()
-main = startBotWithLogger
+main = getArgs >>= startBotWithLogger

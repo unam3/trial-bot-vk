@@ -22,7 +22,6 @@ import GHC.Generics (Generic)
 import Prelude hiding (drop, id)
 import qualified Prelude (drop)
 import Network.HTTP.Req
-import System.Environment (getArgs)
 import System.Log.Logger (Priority (DEBUG, ERROR), debugM, setLevel, traplogging, updateGlobalLogger)
 
 
@@ -240,14 +239,13 @@ processArgs [token, groupId, helpMsg, repeatMsg, echoRepeatNumberStr] = let {
     )
 processArgs _ = Nothing
 
-startBot :: IO ()
-startBot = do
-    args <- getArgs
+startBot :: [String] -> IO ()
+startBot args = do
     case args of
         [_, _, _, _, _] -> case processArgs args of
             Just args' -> void $ cycleProcessing args'
             Nothing -> error "error: some argument passed from command line is wrong"
         _ -> error "error: exactly five arguments needed: access token, group id, helpMsg, repeatMsg, echoRepeatNumber"
 
-startBotWithLogger :: IO ()
-startBotWithLogger = traplogging "trial-bot-vk.main" ERROR "Bot shutdown due to" startBot
+startBotWithLogger :: [String] -> IO ()
+startBotWithLogger args = traplogging "trial-bot-vk.main" ERROR "Bot shutdown due to" $ startBot args
