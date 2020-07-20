@@ -240,7 +240,7 @@ processArgs [token, groupId, helpMsg, repeatMsg, echoRepeatNumberStr] = let {
 processArgs _ = Nothing
 
 startBot :: [String] -> IO ()
-startBot args = do
+startBot args =
     case args of
         [_, _, _, _, _] -> case processArgs args of
             Just args' -> void $ cycleProcessing args'
