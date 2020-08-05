@@ -10,7 +10,6 @@ module Vk
 import Control.Monad (replicateM_, void)
 import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), defaultOptions, encode, fieldLabelModifier, genericParseJSON, genericToJSON)
 import Data.ByteString.Lazy (toStrict)
-import Data.Map.Strict (empty)
 import Data.Text (Text, breakOn, drop, pack)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Text.Read (decimal)
@@ -235,7 +234,7 @@ processArgs [token, groupId, helpMsg, repeatMsg, echoRepeatNumberStr] = let {
         pack helpMsg,
         pack repeatMsg,
         pack echoRepeatNumberStr,
-        empty
+        M.empty
     )
 processArgs _ = Nothing
 
