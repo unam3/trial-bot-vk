@@ -15,7 +15,8 @@ import Data.Either (fromRight)
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust, isJust)
 import Prelude hiding (drop, id)
-import System.Log.Logger (Priority (DEBUG, ERROR), debugM, setLevel, traplogging, updateGlobalLogger)
+import System.Exit (exitFailure, exitSuccess)
+import System.Log.Logger (Priority (DEBUG, ERROR), debugM, errorM, setLevel, traplogging, updateGlobalLogger)
 
 import Vk.Requests
 import Vk.Requests.JSON
@@ -64,7 +65,7 @@ cycleProcessing' config serverInfo =
 cycleProcessing :: Config -> IO LPResponse
 cycleProcessing config = updateGlobalLogger "trial-bot-vk.bot" (setLevel DEBUG)
     >> getLongPollServerInfo config
-    >>= \ serverInfo -> debugM  "trial-bot-vk.bot" (show serverInfo)
+    >>= \ serverInfo -> debugM "trial-bot-vk.bot" (show serverInfo)
     >> cycleProcessing' config serverInfo
 
 
@@ -88,9 +89,11 @@ startBot :: [String] -> IO ()
 startBot args =
     case args of
         [_, _, _, _, _] -> case processArgs args of
-            Just args' -> void $ cycleProcessing args'
-            Nothing -> error "error: some argument passed from command line is wrong"
-        _ -> error "error: exactly five arguments needed: access token, group id, helpMsg, repeatMsg, echoRepeatNumber"
+            Just args' -> void $ cycleProcessing args' >> exitSuccess
+            Nothing -> errorM "trial-bot-vk.bot" "Some argument passed from command line is wrong."
+                >> exitFailure
+        _ -> errorM "trial-bot-vk.bot" "Exactly five arguments needed: access token, group id, helpMsg, repeatMsg, echoRepeatNumber."
+            >> exitFailure
 
 startBotWithLogger :: [String] -> IO ()
-startBotWithLogger args = traplogging "trial-bot-vk.main" ERROR "Bot shutdown due to" $ startBot args
+startBotWithLogger args = traplogging "trial-bot-vk.bot" ERROR "Bot shutdown due to" $ startBot args
