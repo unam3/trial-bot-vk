@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 
 module Vk

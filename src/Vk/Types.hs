@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Vk.Types where
 
 import Data.Map.Strict (Map)
