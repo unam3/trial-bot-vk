@@ -3,7 +3,8 @@
 
 module Vk.Requests where
 
-import Data.Aeson (encode)
+import Control.Monad.IO.Class (MonadIO)
+import Data.Aeson (FromJSON, encode)
 import Data.ByteString.Lazy (toStrict)
 import Data.Text (Text, breakOn, drop, pack)
 import Data.Text.Encoding (decodeUtf8)
@@ -15,15 +16,20 @@ import Vk.Requests.JSON
 import Vk.Types
 
 
+makeRequest :: (MonadIO m, FromJSON a) => Url scheme -> Option scheme -> m (JsonResponse a)
+makeRequest urlScheme params =
+    runReq
+        defaultHttpConfig
+        $ req GET urlScheme NoReqBody jsonResponse params
+
+
 getLongPollServerInfo :: Config -> IO LPServerInfo
 getLongPollServerInfo (tokenSection, groupId, _, _, _, _) = let {
     urlScheme = https "api.vk.com" /: "method" /: "groups.getLongPollServer";
     params = "v" =: ("5.110" :: Text) <>
         "access_token" =: tokenSection <>
         "group_id" =: groupId;
-    runReqM = req GET urlScheme NoReqBody jsonResponse params >>=
-        return . (response :: LPServerInfoResponse -> LPServerInfo) . responseBody :: Req LPServerInfo;
-} in runReq defaultHttpConfig runReqM
+} in (response :: LPServerInfoResponse -> LPServerInfo) . responseBody <$> makeRequest urlScheme params
 
 
 getLongPoll :: LPServerInfo -> IO LPResponse
@@ -35,9 +41,7 @@ getLongPoll serverInfo = let {
         "key" =: key serverInfo <>
         "ts" =: (ts :: LPServerInfo -> Text) serverInfo <>
         "wait" =: ("25" :: Text);
-    runReqM = req GET urlScheme NoReqBody jsonResponse params >>=
-        return . responseBody :: Req LPResponse;
-} in runReq defaultHttpConfig runReqM
+} in responseBody <$> makeRequest urlScheme params
 
 
 getMessage :: Update -> PrivateMessage
@@ -80,6 +84,4 @@ sendMessage (tokenSection, _, helpMsg, repeatMsg, echoRepeatNumberText, _) updat
     params = if isMsgTextRepeatCommand msgText'
         then params' <> "keyboard" =: keyboard
         else params';
-    runReqM = req GET urlScheme NoReqBody jsonResponse params
-        >>= return . responseBody :: Req SendMessageResponse;
-} in runReq defaultHttpConfig runReqM
+} in responseBody <$> makeRequest urlScheme params
