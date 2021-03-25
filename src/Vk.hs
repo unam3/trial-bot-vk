@@ -68,13 +68,13 @@ cycleProcessing config = updateGlobalLogger "trial-bot-vk.bot" (setLevel DEBUG)
     >> cycleProcessing' config serverInfo
 
 
-processArgs :: [String] -> Maybe Config
+processArgs :: [String] -> Either String Config
 processArgs [token, groupId, helpMsg, repeatMsg, echoRepeatNumberStr] = let {
     echoRepeatNumber = (read echoRepeatNumberStr :: Int);
     isInRange n = n > 0 && n < 6;
 } in if or [null token, null groupId, null helpMsg, null repeatMsg, not $ isInRange echoRepeatNumber]
-    then Nothing
-    else Just (
+    then Left "Some argument passed from command line is wrong."
+    else Right (
         pack token,
         pack groupId,
         pack helpMsg,
@@ -82,16 +82,14 @@ processArgs [token, groupId, helpMsg, repeatMsg, echoRepeatNumberStr] = let {
         pack echoRepeatNumberStr,
         M.empty
     )
-processArgs _ = Nothing
+processArgs _ = Left "Exactly five arguments needed: access token, group id, helpMsg, repeatMsg, echoRepeatNumber."
 
 startBot :: [String] -> IO ()
 startBot args =
-    case args of
-        [_, _, _, _, _] -> case processArgs args of
-            Just args' -> void $ cycleProcessing args' >> exitSuccess
-            Nothing -> errorM "trial-bot-vk.bot" "Some argument passed from command line is wrong."
-                >> exitFailure
-        _ -> errorM "trial-bot-vk.bot" "Exactly five arguments needed: access token, group id, helpMsg, repeatMsg, echoRepeatNumber."
+    case processArgs args of
+        Right config -> void $ cycleProcessing config
+            >> exitSuccess
+        Left errorMessage -> errorM "trial-bot-vk.bot" errorMessage
             >> exitFailure
 
 startBotWithLogger :: [String] -> IO ()
