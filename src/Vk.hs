@@ -28,6 +28,20 @@ isMessageNew = (== "message_new") . (_type :: Update -> Text)
 getInt :: Text -> Int
 getInt = fst . fromRight (1, "1") . decimal
 
+
+sendAndLog :: Config -> Update -> IO ()
+sendAndLog config update = getSystemTime
+    >>= sendMessage config update
+        >>= (debugM "trial-bot-vk.bot" . show)
+
+
+responseToText :: Config -> Update -> Int -> Text -> IO ()
+responseToText  config update echoRepeatNumber msgText =
+    if isMsgTextHelpCommand msgText || isMsgTextRepeatCommand msgText
+    then sendAndLog config update
+    else replicateM_ echoRepeatNumber $ sendAndLog config update
+
+
 processUpdates :: Config -> [Update] -> IO Config
 processUpdates config@(tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumberText, numberOfRepeatsMap) updates' = let {
     newMessages = filter isMessageNew updates';
@@ -38,34 +52,31 @@ processUpdates config@(tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumb
     maybeNewEchoRepeatNumberText = payload msg;
     newNumberOfRepeatsMap = M.insert (from_id msg) (fromJust maybeNewEchoRepeatNumberText) numberOfRepeatsMap;
     echoRepeatNumber = getInt $ M.findWithDefault echoRepeatNumberText (from_id msg) numberOfRepeatsMap;
-    sendAndLog = getSystemTime
-        >>= sendMessage config latestMessage
-        >>= (debugM "trial-bot-vk.bot" . show);
     newConfig = (tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumberText, newNumberOfRepeatsMap);
 } in if null newMessages || isMsgHasNoText
     then return config 
     else if isJust maybeNewEchoRepeatNumberText
-    then return newConfig
-    else (if isMsgTextHelpCommand msgText || isMsgTextRepeatCommand msgText
-    then sendAndLog
-    else replicateM_ echoRepeatNumber sendAndLog) >> return config
+        then return newConfig
+        else responseToText config latestMessage echoRepeatNumber msgText
+            >> return config
 
 cycleProcessing' :: Config -> LPServerInfo -> IO LPResponse
 cycleProcessing' config serverInfo =
     getLongPoll serverInfo
     >>= \ lp -> debugM "trial-bot-vk.bot" (show lp)
-    >> processUpdates config (updates lp)
-    >>= \ newConfig -> cycleProcessing' newConfig LPServerInfo {
-        key = key serverInfo,
-        server = server serverInfo,
-        ts = (ts :: LPResponse -> Text) lp
-    }
+        >> processUpdates config (updates lp)
+            >>= \ newConfig -> cycleProcessing' newConfig LPServerInfo {
+                key = key serverInfo,
+                server = server serverInfo,
+                ts = (ts :: LPResponse -> Text) lp
+            }
 
 cycleProcessing :: Config -> IO LPResponse
-cycleProcessing config = updateGlobalLogger "trial-bot-vk.bot" (setLevel DEBUG)
-    >> getLongPollServerInfo config
-    >>= \ serverInfo -> debugM "trial-bot-vk.bot" (show serverInfo)
-    >> cycleProcessing' config serverInfo
+cycleProcessing config = 
+    debugM "trial-bot-vk.bot" "Bot is up and running."
+        >> getLongPollServerInfo config
+            >>= \ serverInfo -> debugM "trial-bot-vk.bot" (show serverInfo)
+                >> cycleProcessing' config serverInfo
 
 
 processArgs :: [String] -> Either String Config
@@ -86,6 +97,7 @@ processArgs _ = Left "Exactly five arguments needed: access token, group id, hel
 
 startBot :: [String] -> IO ()
 startBot args =
+    
     case processArgs args of
         Right config -> void $ cycleProcessing config
             >> exitSuccess
@@ -93,4 +105,10 @@ startBot args =
             >> exitFailure
 
 startBotWithLogger :: [String] -> IO ()
-startBotWithLogger args = traplogging "trial-bot-vk.bot" ERROR "Bot shutdown due to" $ startBot args
+startBotWithLogger args =
+    traplogging
+        "trial-bot-vk.bot"
+        ERROR
+        "Bot shutdown due to"
+        $ updateGlobalLogger "trial-bot-vk.bot" (setLevel DEBUG)
+            >> startBot args
