@@ -36,14 +36,15 @@ sendAndLog config update = getSystemTime
 
 
 responseToText :: Config -> Update -> Int -> Text -> IO ()
-responseToText  config update echoRepeatNumber msgText =
+responseToText config update echoRepeatNumber msgText =
     if isMsgTextHelpCommand msgText || isMsgTextRepeatCommand msgText
     then sendAndLog config update
     else replicateM_ echoRepeatNumber $ sendAndLog config update
 
 
 processUpdates :: Config -> [Update] -> IO Config
-processUpdates config@(tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumberText, numberOfRepeatsMap) updates' = let {
+processUpdates config updates' = let {
+    (tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumberText, numberOfRepeatsMap) = config;
     newMessages = filter isMessageNew updates';
     latestMessage = last newMessages;
     msg = getMessage latestMessage;
@@ -65,11 +66,11 @@ cycleProcessing' config serverInfo =
     getLongPoll serverInfo
     >>= \ lp -> debugM "trial-bot-vk.bot" (show lp)
         >> processUpdates config (updates lp)
-            >>= \ newConfig -> cycleProcessing' newConfig LPServerInfo {
-                key = key serverInfo,
-                server = server serverInfo,
-                ts = (ts :: LPResponse -> Text) lp
-            }
+            >>= \ newConfig -> cycleProcessing'
+                newConfig
+                serverInfo {
+                    ts = (ts :: LPResponse -> Text) lp
+                }
 
 cycleProcessing :: Config -> IO LPResponse
 cycleProcessing config = 
