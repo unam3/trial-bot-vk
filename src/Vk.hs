@@ -15,8 +15,9 @@ import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust, isJust)
 import Prelude hiding (drop, id)
 import System.Exit (exitFailure, exitSuccess)
-import System.Log.Logger (Priority (DEBUG, ERROR), debugM, errorM, setLevel, traplogging, updateGlobalLogger)
+import System.Log.Logger (Priority (DEBUG, ERROR), debugM, errorM, infoM, setLevel, traplogging, updateGlobalLogger)
 
+import qualified Vk.Logger as L
 import Vk.Requests
 import Vk.Requests.JSON
 import Vk.Types
@@ -29,21 +30,21 @@ getInt :: Text -> Int
 getInt = fst . fromRight (1, "1") . decimal
 
 
-sendAndLog :: Config -> Update -> IO ()
-sendAndLog config update = getSystemTime
+sendAndLog :: L.Handle () -> Config -> Update -> IO ()
+sendAndLog loggerH config update = getSystemTime
     >>= sendMessage config update
-        >>= (debugM "trial-bot-vk.bot" . show)
+        >>= L.hDebug loggerH . show
 
 
-responseToText :: Config -> Update -> Int -> Text -> IO ()
-responseToText config update echoRepeatNumber msgText =
+responseToText :: L.Handle () -> Config -> Update -> Int -> Text -> IO ()
+responseToText loggerH config update echoRepeatNumber msgText =
     if isMsgTextHelpCommand msgText || isMsgTextRepeatCommand msgText
-    then sendAndLog config update
-    else replicateM_ echoRepeatNumber $ sendAndLog config update
+    then sendAndLog loggerH config update
+    else replicateM_ echoRepeatNumber $ sendAndLog loggerH config update
 
 
-processUpdates :: Config -> [Update] -> IO Config
-processUpdates config updates' = let {
+processUpdates :: L.Handle () -> Config -> [Update] -> IO Config
+processUpdates loggerH config updates' = let {
     (tokenSection, groupId, helpMsg, repeatMsg, echoRepeatNumberText, numberOfRepeatsMap) = config;
     newMessages = filter isMessageNew updates';
     latestMessage = last newMessages;
@@ -58,26 +59,27 @@ processUpdates config updates' = let {
     then return config 
     else if isJust maybeNewEchoRepeatNumberText
         then return newConfig
-        else responseToText config latestMessage echoRepeatNumber msgText
+        else responseToText loggerH config latestMessage echoRepeatNumber msgText
             >> return config
 
-cycleProcessing' :: Config -> LPServerInfo -> IO LPResponse
-cycleProcessing' config serverInfo =
+cycleProcessing' :: L.Handle () -> Config -> LPServerInfo -> IO LPResponse
+cycleProcessing' loggerH config serverInfo =
     getLongPoll serverInfo
-    >>= \ lp -> debugM "trial-bot-vk.bot" (show lp)
-        >> processUpdates config (updates lp)
+    >>= \ lp -> L.hDebug loggerH (show lp)
+        >> processUpdates loggerH config (updates lp)
             >>= \ newConfig -> cycleProcessing'
+                loggerH
                 newConfig
                 serverInfo {
                     ts = (ts :: LPResponse -> Text) lp
                 }
 
-cycleProcessing :: Config -> IO LPResponse
-cycleProcessing config = 
-    debugM "trial-bot-vk.bot" "Bot is up and running."
+cycleProcessing :: L.Handle () -> Config -> IO LPResponse
+cycleProcessing loggerH config = 
+    L.hInfo loggerH "Bot is up and running."
         >> getLongPollServerInfo config
-            >>= \ serverInfo -> debugM "trial-bot-vk.bot" (show serverInfo)
-                >> cycleProcessing' config serverInfo
+            >>= \ serverInfo -> L.hDebug loggerH (show serverInfo)
+                >> cycleProcessing' loggerH config serverInfo
 
 
 processArgs :: [String] -> Either String Config
@@ -96,20 +98,26 @@ processArgs [token, groupId, helpMsg, repeatMsg, echoRepeatNumberStr] = let {
     )
 processArgs _ = Left "Exactly five arguments needed: access token, group id, helpMsg, repeatMsg, echoRepeatNumber."
 
-startBot :: [String] -> IO ()
-startBot args =
-    
+startBot :: L.Handle () -> [String] -> IO ()
+startBot loggerH args =
     case processArgs args of
-        Right config -> void $ cycleProcessing config
+        Right config -> void $ cycleProcessing loggerH config
             >> exitSuccess
-        Left errorMessage -> errorM "trial-bot-vk.bot" errorMessage
+        Left errorMessage -> L.hError loggerH errorMessage
             >> exitFailure
 
 startBotWithLogger :: [String] -> IO ()
 startBotWithLogger args =
-    traplogging
-        "trial-bot-vk.bot"
-        ERROR
-        "Bot shutdown due to"
-        $ updateGlobalLogger "trial-bot-vk.bot" (setLevel DEBUG)
-            >> startBot args
+    do L.withLogger
+            (L.Config
+                -- use INFO, DEBUG or ERROR here
+                -- (add to System.Log.Logger import items if missed)
+                DEBUG
+                (traplogging "trial-bot-vk" ERROR "Unhandled exception occured" .
+                    updateGlobalLogger "trial-bot-vk" . setLevel)
+                (debugM "trial-bot-vk")
+                (infoM "trial-bot-vk")
+                (errorM "trial-bot-vk")
+                )
+            ( \loggerH -> startBot loggerH args)
+       pure ()
